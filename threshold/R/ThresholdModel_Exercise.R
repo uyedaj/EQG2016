@@ -72,6 +72,15 @@ tiplabels(pch=22, bg=traits[['a']])
 tiplabels(pch=22, bg=traits[['b']], adj=c(0.53,0.5))
 tiplabels(pch=22, bg=traits[['c']], adj=c(0.56,0.5))
 
+## Typically, discrete traits on phylogenies are modeled as Markov models with no memory of their 
+## previous states. Let's look at what our reconstructions and parameters estimates of these processes
+## would look like.
+par(mfrow=c(1,3))
+smtrees.a <- make.simmap(td$phy, td[['a']], model="ER", nsim=10)
+smtrees.b <- make.simmap(td$phy, td[['b']], model="ER", nsim=10)
+smtrees.c <- make.simmap(td$phy, td[['c']], model="ER", nsim=10)
+plotSimmap(smtrees.a)
+
 ## # Rphylip
 ## Now let's try to estimate parameters for the threshold model using Rphylip & threshML. Note that if you have
 ## not put threshML in your system path, or in your working directory, you will need to specify where it is.
@@ -129,8 +138,10 @@ lines(mcmc.ac[postburnin,'r'], col="green")
 
 ## # MCMCglmmRAM
 ## Jarrod Hadfield has developed a more efficient algorithm for estimating the threshold model using 
-## GLMM's. This is essentially the same as our animal model from quantitative genetics, but with the
-## heritability set to 1, but instead of pedigree, we use our tree. 
+## GLMM's. This is essentially the same as our animal model from quantitative genetics
+## What is the comparative analog to additive genetic variance? To a pedigree? 
+## Look at the prior (maybe go back to Pat Carter's tutorial on MCMCglmm). What assumption is being
+## made about residual variation? 
 install.packages("MCMCglmmRAM_2.22.tar.gz", repos=NULL, type="source")
 library(MCMCglmmRAM)
 ## The data frame must have a column named "animal" and it MUST BE A FACTOR (not character).
@@ -180,4 +191,18 @@ a.pie <- (a.nodeLiab-min(a.nodeLiab))/diff(range(a.nodeLiab))
 a.pie <- cbind(a.pie, 1-a.pie)
 nodelabels(pie=a.pie, piecol = c("white", "black"), cex=0.5)
 tiplabels(pch=21, bg = c("white", "black")[traits$a+1])
+
+## # Exercises & Discussion:
+## 1. Compare ancestral state reconstructions from ER and ARD models to those using the
+## threshold model. 
+## 2. Estimate correlations using Pagel's 1994 correlation method. Use the function 'fitPagel'
+## in phytools.
+## 3. Compare reconstructions from the corHMM model from Brian's tutorial in Computer Exercise 5.1
+## with reconstructions from the threshold model. Can a threshold model be well described by a 
+## a HMM? 
+
+
+
+
+
 
