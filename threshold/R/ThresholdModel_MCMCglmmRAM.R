@@ -1,0 +1,93 @@
+## # Threshold models
+
+## # PHYLIP & RPhylip
+## Follow the directions to install phylip and Rphylip. 
+#+echo=FALSE
+setwd("~/repos/threshold/R/")
+library(geiger)
+library(phytools)
+library(MCMCglmmRAM)
+library(coda)
+library(treeplyr)
+
+## Let's start by simulating data under multivariate Brownian Motion with a known covariance structure.
+# Simulate the tree
+ntaxa <- 100
+set.seed(1)
+tree <- sim.bdtree(b=1, stop="taxa", n=ntaxa)
+tree$edge.length <- tree$edge.length/max(branching.times(tree))
+
+# Set up the covariance matrix for changes in the underlying liabilities
+R <- matrix(c(  1,   0.7, -0.9,
+                0.7,     1, -0.4,
+                -0.9,   -0.4,   1), ncol=3, nrow=3, byrow=TRUE)
+colnames(R) <- rownames(R) <- c("A", "B", "C")
+# Simulate the data using 'sim.char()'. 
+dat <- sim.char(tree, par=R, nsim=1, model="BM")[,,1]
+colnames(dat) <- c("A", "B", "C")
+pairs(dat)
+
+## Match the tree and to the liabilities and create discretized variables. 
+td <- make.treedata(tree, dat)
+
+td <- mutate(td, a = as.numeric(A > median(A)), b = as.numeric(B > median(B)), c = as.numeric(C > median(C)))
+tree <- td$phy
+traits <- as.data.frame(td$dat)
+rownames(traits) <- td$phy$tip.label
+
+## Plot out the discrete traits
+par(mfrow=c(1,1))
+plot(tree, show.tip.label=FALSE)
+tiplabels(pch=22, bg=traits[['a']])
+tiplabels(pch=22, bg=traits[['b']], adj=c(0.53,0.5))
+tiplabels(pch=22, bg=traits[['c']], adj=c(0.56,0.5))
+
+## # MCMCglmmRAM
+library(MCMCglmmRAM)
+traits$animal <- factor(tree$tip.label)
+prior1 <- list(R=list(V=diag(2)*1e-15, fix=1), G=list(G1=list(V=diag(2), nu=0.002)))
+mglmm.AC <- MCMCglmm(cbind(C, A)~trait-1, random=~us(trait):animal, rcov=~us(trait):units,
+                     pedigree=tree, reduced=TRUE, data=traits, prior=prior1, 
+                     pr=TRUE, pl=TRUE, family=c("gaussian", "gaussian"), thin=1)
+summary(mglmm.AC)
+plot(mglmm.AC)
+
+prior2 <- list(R=list(V=diag(2)*1e-15, fix=1), G=list(G1=list(V=diag(2), nu=0.002, fix=2)))
+mglmm.aC <- MCMCglmm(cbind(C, a)~trait-1, random=~us(trait):animal, rcov=~us(trait):units,
+                  pedigree=tree, reduced=TRUE, data=traits, prior=prior2, 
+                    pr=TRUE, pl=TRUE, family=c("gaussian", "threshold"), thin=1)
+summary(mglmm.aC)
+plot(mglmm.aC)
+
+prior3 <- list(R=list(V=diag(2)*1e-15, fix=1), G=list(G1=list(V=diag(2), nu=0.002)))
+mglmm.ac <- MCMCglmm(cbind(c, a)~trait-1, random=~corg(trait):animal, rcov=~corg(trait):units,
+                     pedigree=tree, reduced=TRUE, data=traits, prior=prior3, 
+                     pr=TRUE, pl=TRUE, family=c("threshold", "threshold"), thin=1)
+summary(mglmm.ac)
+plot(mglmm.ac)
+
+
+prior3 <- list(R=list(V=diag(3)*1e-15, fix=1), G=list(G1=list(V=diag(3), nu=0.002)))
+mglmm.abc <- MCMCglmm(cbind(a,b,c)~trait-1, random=~corg(trait):animal, rcov=~corg(trait):units,
+                     pedigree=tree, reduced=TRUE, data=traits, prior=prior3, 
+                     pr=TRUE, pl=TRUE, family=c("threshold", "threshold", "threshold"), thin=1)
+summary(mglmm.abc)
+plot(mglmm.abc)
+
+
+postburnin <- floor(0.3*nrow(mglmm.ac$Liab)):nrow(mglmm.ac$Liab)
+a.liab <- apply(mglmm.ac$Liab[postburnin,1:100], 2, mean)
+c.liab <- apply(mglmm.ac$Liab[postburnin,101:200], 2, mean)
+
+plot(a.liab, traits$A, pch=21,  bg=traits$a)
+plot(c.liab, traits$C, pch=21,  bg=traits$c)
+
+## Now get the liabilities at the nodes.
+a.nodeLiab <- apply(mglmm.ac$Sol[postburnin, 1:tree$Nnode], 2, mean)
+
+## And we can plot them on the tree:
+plot(tree)
+a.pie <- (a.nodeLiab-min(a.nodeLiab))/diff(range(a.nodeLiab))
+a.pie <- cbind(a.pie, 1-a.pie)
+nodelabels(pie=a.pie, piecol = c("white", "black"), cex=0.5)
+tiplabels(pch=21, bg = c("white", "black")[traits$a+1])
